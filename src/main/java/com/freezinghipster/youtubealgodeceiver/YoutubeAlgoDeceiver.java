@@ -46,20 +46,6 @@ public class YoutubeAlgoDeceiver {
 
     }
 
-    public static void main(String[] args) {
-        YoutubeAlgoDeceiver deceiver = new YoutubeAlgoDeceiver("/home/chapa/bin/geckodriver", "/home/chapa/bin/firefox");
-
-        String s1 = deceiver.initRunner();
-
-        deceiver.setShutdownOnEmptyQueue(s1, true);
-
-        deceiver.pushVideoId("jdh_GjBsphg");
-        deceiver.pushVideoId("lGHwQvhHvmU");
-
-        deceiver.startAllRunners();
-
-    }
-
     private File getBaseProfileFolderPathCopy() throws IOException {
         String tmpDir = System.getProperty("java.io.tmpdir");
         File targetFile = new File(tmpDir + File.separator + UUID.randomUUID());
