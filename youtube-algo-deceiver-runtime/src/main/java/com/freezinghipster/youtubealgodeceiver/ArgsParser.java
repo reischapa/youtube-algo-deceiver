@@ -10,6 +10,10 @@ import java.util.Map;
 
 public class ArgsParser {
 
+    public static void main(String[] args) {
+        System.out.println("hello");
+    }
+
     public static Map<String, String> parseArgs(String... args) {
         // TODO complete this
         CommandLine.Model.CommandSpec spec = CommandLine.Model.CommandSpec.create();
