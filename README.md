@@ -14,7 +14,7 @@ Except it will be in a headless Firefox instance, running in some remote server,
  
 ### TODO
  
- - CLI - not done
+ - CLI - not done, in progress
  - Documentation - not done
  - Finish readying video player for multiple simultaneous instances of firefox - done
  

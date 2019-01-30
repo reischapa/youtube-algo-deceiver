@@ -10,47 +10,48 @@ import org.openqa.selenium.firefox.FirefoxProfile;
 
 import java.io.File;
 import java.io.IOException;
-import java.text.MessageFormat;
 import java.util.*;
+import java.util.concurrent.ConcurrentLinkedDeque;
 
-public class YoutubeAlgoDeceiver {
+public class Deceiver {
     private final Object lock = new Object();
+
     private Deque<String> videoIds;
-    private File baseProfileFolderPath;
-    private String geckoDriverPath;
-    private String firefoxBinPath;
+
     private Map<String, Thread> threadStore;
     private Map<String, YoutubeAlgoDeceiverRunner> runners;
-    public YoutubeAlgoDeceiver(String geckoDriverPath, String firefoxBinPath) {
-        this.videoIds = new LinkedList<>();
 
-        this.geckoDriverPath = geckoDriverPath;
+    private DeceiverOptions options;
 
-        this.firefoxBinPath = firefoxBinPath;
+    public Deceiver(DeceiverOptions options) {
+        this.videoIds = new ConcurrentLinkedDeque<>();
 
         this.threadStore = new HashMap<>();
 
         this.runners = new HashMap<>();
 
-        System.setProperty("webdriver.gecko.driver", this.geckoDriverPath);
+        this.options = options;
 
-        System.out.println("Loading base firefox profile...");
-
-        try {
-            baseProfileFolderPath = new File(YoutubeAlgoDeceiver.class.getClassLoader().getResource("firefox-profile-dir").toURI());
-        } catch (Exception e) {
-            throw new IllegalStateException("Could not find firefox profile dir");
-        }
-
-        System.out.println("Loaded base firefox profile present in firefox-profile-dir.");
+        System.setProperty("webdriver.gecko.driver", this.options.getGeckoDriverPath());
 
     }
 
     private File getBaseProfileFolderPathCopy() throws IOException {
+        System.out.println("Copying base firefox profile...");
+
+        File baseProfileFolderPath;
+        try {
+            baseProfileFolderPath = new File(this.options.getProfileFolderPath());
+        } catch (Exception e) {
+            throw new IllegalStateException("Could not find firefox profile dir");
+        }
+
         String tmpDir = System.getProperty("java.io.tmpdir");
         File targetFile = new File(tmpDir + File.separator + UUID.randomUUID());
 
-        FileUtils.copyDirectory(this.baseProfileFolderPath, targetFile);
+        FileUtils.copyDirectory(baseProfileFolderPath, targetFile);
+
+        System.out.println("Copied base firefox profile present onto " + targetFile);
 
         return targetFile;
     }
@@ -58,7 +59,7 @@ public class YoutubeAlgoDeceiver {
     private FirefoxDriver getFirefoxDriverInstance() {
         FirefoxOptions options = new FirefoxOptions();
 
-        FirefoxBinary binary = new FirefoxBinary(new File(this.firefoxBinPath));
+        FirefoxBinary binary = new FirefoxBinary(new File(this.options.getFirefoxDriverPath()));
 
         options.setBinary(binary);
 
@@ -126,6 +127,12 @@ public class YoutubeAlgoDeceiver {
         }
     }
 
+    public void setMaxPlayTime(String runnerId, long value) {
+        if (this.runners.containsKey(runnerId)) {
+            this.runners.get(runnerId).setMaxPlayTime(value);
+        }
+    }
+
     public boolean stopRunner(String runnerId) {
         if (!this.threadStore.containsKey(runnerId)) {
             return false;
@@ -150,24 +157,18 @@ public class YoutubeAlgoDeceiver {
     }
 
     public void pushVideoId(String videoId) {
-        synchronized (lock) {
-            this.videoIds.addFirst(videoId);
-        }
+        this.videoIds.addFirst(videoId);
     }
 
     public void pushVideoIds(Collection<String> videoIds) {
-        synchronized (lock) {
-            for (String videoId : videoIds) {
-                this.videoIds.addFirst(videoId);
-            }
-        }
+        this.videoIds.addAll(videoIds);
     }
 
     private class YoutubeAlgoDeceiverRunner implements Runnable {
         private final FirefoxDriver driver;
         private final String identifier;
-        private boolean pendingShutdown;
         private boolean shuttingDownIfQueueIsEmpty;
+        private long maxPlayTime = 10 * 1000;
 
         public YoutubeAlgoDeceiverRunner(FirefoxDriver driver) {
             this.driver = driver;
@@ -177,33 +178,24 @@ public class YoutubeAlgoDeceiver {
         @Override
         public void run() {
             while (true) {
-                if (this.isPendingShutdown()) {
-                    System.out.println(MessageFormat.format("Youtube algo deceiver with id {0) has finished.", this.identifier));
-                    this.cleanup();
-                    return;
-                }
-
                 try {
                     Thread.sleep(1000);
 
-                    String videoId;
+                    String videoId = videoIds.pollLast();
 
-                    synchronized (lock) {
-                        if (videoIds.size() == 0) {
-                            if (this.isShuttingDownIfQueueIsEmpty()) {
-                                System.out.println("No video urls in queue... Deceiver Runner with id " + this.identifier + " exiting...");
-                                this.cleanup();
-                                return;
-                            } else {
-                                System.out.println("No video urls in queue... Deceiver Runner with id " + this.identifier + " waiting...");
-                                continue;
-                            }
+
+                    if (videoId == null) {
+                        if (this.isShuttingDownIfQueueIsEmpty()) {
+                            System.out.println("No video urls in queue... Deceiver Runner with id " + this.identifier + " exiting...");
+                            this.cleanup();
+                            return;
+                        } else {
+                            System.out.println("No video urls in queue... Deceiver Runner with id " + this.identifier + " waiting...");
+                            continue;
                         }
-
-                        videoId = videoIds.removeLast();
-                        System.out.println("Video id found! id = " + videoId);
                     }
 
+                    System.out.println("Video id found! id = " + videoId);
 
                     driver.get("http://youtube.com/watch?v=" + videoId);
 
@@ -229,13 +221,12 @@ public class YoutubeAlgoDeceiver {
 
                     List<WebElement> candidates;
 
-                    long maxAge = 10 * 1000;
-
                     long initialTimestamp = System.currentTimeMillis();
 
                     while (true) {
-                        if (System.currentTimeMillis() - initialTimestamp > maxAge) {
+                        if (System.currentTimeMillis() - initialTimestamp > this.maxPlayTime) {
                             System.out.println("Deceiver runner with id " + this.identifier + " has reached max play time. Exiting out of play loop...");
+                            driver.get("http://example.com");
                             break;
                         }
 
@@ -270,14 +261,6 @@ public class YoutubeAlgoDeceiver {
             this.driver.quit();
         }
 
-        public synchronized boolean isPendingShutdown() {
-            return pendingShutdown;
-        }
-
-        public synchronized void setPendingShutdown(boolean pendingShutdown) {
-            this.pendingShutdown = pendingShutdown;
-        }
-
 
         public boolean isShuttingDownIfQueueIsEmpty() {
             return shuttingDownIfQueueIsEmpty;
@@ -287,6 +270,13 @@ public class YoutubeAlgoDeceiver {
             this.shuttingDownIfQueueIsEmpty = shuttingDownIfQueueIsEmpty;
         }
 
+        public long getMaxPlayTime() {
+            return maxPlayTime;
+        }
+
+        public void setMaxPlayTime(long maxPlayTime) {
+            this.maxPlayTime = maxPlayTime;
+        }
 
         public String getIdentifier() {
             return identifier;
