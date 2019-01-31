@@ -8,10 +8,10 @@ public interface DeceiverOptions {
 
     String getProfileFolderPath();
 
-    Integer getInstancePlayDuration();
+    Long getMaxPlayingTime();
 
-    Integer getQueueTimeout();
+    Long getQueueCycleTime();
 
-    Integer getQueueCycleTime();
+    boolean isRunningHeadless();
 
 }

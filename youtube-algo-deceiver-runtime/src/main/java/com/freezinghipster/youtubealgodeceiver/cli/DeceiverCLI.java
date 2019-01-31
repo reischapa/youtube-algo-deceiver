@@ -2,10 +2,10 @@ package com.freezinghipster.youtubealgodeceiver.cli;
 
 import com.freezinghipster.youtubealgodeceiver.Deceiver;
 import com.freezinghipster.youtubealgodeceiver.DeceiverOptions;
-import com.freezinghipster.youtubealgodeceiver.cli.DeceiverOptionsImpl.YoutubeAlgoDeceiverOptionKeys;
+import com.freezinghipster.youtubealgodeceiver.DeceiverRunnerOptions;
+import com.freezinghipster.youtubealgodeceiver.cli.DeceiverOptionsImpl.CLIDeceiverOptionsKeys;
 import picocli.CommandLine;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,7 +24,7 @@ public class DeceiverCLI {
 
         spec.addOption(
                 CommandLine.Model.OptionSpec.builder("--geckoDriverPath")
-                        .paramLabel(YoutubeAlgoDeceiverOptionKeys.GECKO_DRIVER_PATH.toString())
+                        .paramLabel(CLIDeceiverOptionsKeys.GECKO_DRIVER_PATH.toString())
                         .type(String.class)
                         .description("full path to gecko driver binary")
                         .required(true)
@@ -33,7 +33,7 @@ public class DeceiverCLI {
 
         spec.addOption(
                 CommandLine.Model.OptionSpec.builder("--firefoxPath")
-                        .paramLabel(YoutubeAlgoDeceiverOptionKeys.FIREFOX_PATH.toString())
+                        .paramLabel(CLIDeceiverOptionsKeys.FIREFOX_PATH.toString())
                         .type(String.class)
                         .description("full path to firefox binary")
                         .required(true)
@@ -42,7 +42,7 @@ public class DeceiverCLI {
 
         spec.addOption(
                 CommandLine.Model.OptionSpec.builder("--profileFolderPath")
-                        .paramLabel(YoutubeAlgoDeceiverOptionKeys.PROFILE_FOLDER_PATH.toString())
+                        .paramLabel(CLIDeceiverOptionsKeys.PROFILE_FOLDER_PATH.toString())
                         .type(String.class)
                         .description("full path to firefox profile path. A copy will be created in /tmp for each instance.")
                         .required(true)
@@ -52,28 +52,28 @@ public class DeceiverCLI {
 
         spec.addOption(
                 CommandLine.Model.OptionSpec.builder("-d", "--duration")
-                        .paramLabel(YoutubeAlgoDeceiverOptionKeys.DURATION.toString())
-                        .type(Integer.class)
-                        .description("maximum number of seconds that each runner will spend on each video")
-                        .defaultValue("60")
-                        .build()
-        );
-
-        spec.addOption(
-                CommandLine.Model.OptionSpec.builder("-T", "--queueTimeout")
-                        .paramLabel(YoutubeAlgoDeceiverOptionKeys.QUEUE_TIMEOUT.toString())
-                        .type(Integer.class)
-                        .description("number of videoId queue polling cycles that a runner will wait for before exiting")
-                        .defaultValue("3")
+                        .paramLabel(CLIDeceiverOptionsKeys.DURATION.toString())
+                        .type(Long.class)
+                        .description("maximum number of millis that each runner will spend on each video")
+                        .defaultValue("60000")
                         .build()
         );
 
         spec.addOption(
                 CommandLine.Model.OptionSpec.builder("-t", "--queueCycleTime")
-                        .paramLabel(YoutubeAlgoDeceiverOptionKeys.QUEUE_CYCLE_TIME.toString())
-                        .type(Integer.class)
-                        .description("number of seconds between queue polling")
-                        .defaultValue("10")
+                        .paramLabel(CLIDeceiverOptionsKeys.QUEUE_CYCLE_TIME.toString())
+                        .type(Long.class)
+                        .description("number of millis between queue polling")
+                        .defaultValue("10000")
+                        .build()
+        );
+
+        spec.addOption(
+                CommandLine.Model.OptionSpec.builder("--runHeadless")
+                        .paramLabel(CLIDeceiverOptionsKeys.RUNNING_HEADLESS.toString())
+                        .type(Boolean.class)
+                        .description("whether instances should be headless")
+                        .defaultValue(Boolean.TRUE.toString())
                         .build()
         );
 
@@ -88,34 +88,36 @@ public class DeceiverCLI {
 
 
 
-
         commandLine = new CommandLine(spec);
 
         resultHandler = new Handler().useOut(System.out);
 
         exceptionHandler = new CommandLine.DefaultExceptionHandler<>();
-
-
     }
 
     public static void main(String[] args) throws InterruptedException {
         DeceiverCLI handler = new DeceiverCLI();
 
         Map<String,Object> options = handler.parseArgs(args);
+        System.out.println(options);
 
-        DeceiverOptions defaultDeceiverOptions = new DeceiverOptionsImpl(options);
+        DeceiverOptions deceiverOptions = new DeceiverOptionsImpl(options);
+        DeceiverRunnerOptions deceiverRunnerOptions = new DeceiverRunnerOptions();
 
-        Deceiver deceiver = new Deceiver(defaultDeceiverOptions);
+        System.out.println(deceiverOptions.getQueueCycleTime());
+
+        deceiverRunnerOptions.setMaxPlayTime(deceiverOptions.getMaxPlayingTime());
+        deceiverRunnerOptions.setShuttingDownIfQueueIsEmpty(false);
+        deceiverRunnerOptions.setQueueCycleTime(deceiverOptions.getQueueCycleTime());
+
+        Deceiver deceiver = new Deceiver(deceiverOptions);
 
         for (int i = 0; i < Integer.parseInt(options.get("COUNT").toString()); i++) {
             String runnerId = deceiver.initRunner();
-            deceiver.setMaxPlayTime(runnerId, defaultDeceiverOptions.getInstancePlayDuration());
-            deceiver.setShutdownOnEmptyQueue(runnerId, false);
+            deceiver.setRunnerOptions(runnerId, deceiverRunnerOptions);
         }
 
         deceiver.startAllRunners();
-
-        deceiver.pushVideoIds(Arrays.asList("xsxy5LZ1T_A", "WJt_4vgWLlA"));
 
         Thread.sleep(30000);
 

@@ -1,8 +1,6 @@
 package com.freezinghipster.youtubealgodeceiver;
 
 import org.apache.commons.io.FileUtils;
-import org.openqa.selenium.By;
-import org.openqa.selenium.WebElement;
 import org.openqa.selenium.firefox.FirefoxBinary;
 import org.openqa.selenium.firefox.FirefoxDriver;
 import org.openqa.selenium.firefox.FirefoxOptions;
@@ -19,7 +17,7 @@ public class Deceiver {
     private Deque<String> videoIds;
 
     private Map<String, Thread> threadStore;
-    private Map<String, YoutubeAlgoDeceiverRunner> runners;
+    private Map<String, DeceiverRunner> runners;
 
     private DeceiverOptions options;
 
@@ -63,6 +61,10 @@ public class Deceiver {
 
         options.setBinary(binary);
 
+        if (this.options.isRunningHeadless()) {
+            options.addArguments("-headless");
+        }
+
         File profileFolder;
 
         try {
@@ -80,18 +82,18 @@ public class Deceiver {
 
     }
 
-    private YoutubeAlgoDeceiverRunner getRunner() {
+    private DeceiverRunner getRunner() {
         FirefoxDriver driver = this.getFirefoxDriverInstance();
 
         if (driver == null) {
             return null;
         }
 
-        return new YoutubeAlgoDeceiverRunner(driver);
+        return new DeceiverRunner(driver, this.videoIds);
     }
 
     public String initRunner() {
-        YoutubeAlgoDeceiverRunner runner = this.getRunner();
+        DeceiverRunner runner = this.getRunner();
 
         if (runner == null) {
             return null;
@@ -121,16 +123,18 @@ public class Deceiver {
         }
     }
 
-    public void setShutdownOnEmptyQueue(String runnerId, boolean value) {
+    public void setRunnerOptions(String runnerId, DeceiverRunnerOptions options) {
         if (this.runners.containsKey(runnerId)) {
-            this.runners.get(runnerId).setShuttingDownIfQueueIsEmpty(value);
+            this.runners.get(runnerId).setOptions(options);
         }
     }
 
-    public void setMaxPlayTime(String runnerId, long value) {
+    public DeceiverRunnerOptions getRunnerOptions(String runnerId) {
         if (this.runners.containsKey(runnerId)) {
-            this.runners.get(runnerId).setMaxPlayTime(value);
+            return this.runners.get(runnerId).getOptions();
         }
+
+        return null;
     }
 
     public boolean stopRunner(String runnerId) {
@@ -162,137 +166,5 @@ public class Deceiver {
 
     public void pushVideoIds(Collection<String> videoIds) {
         this.videoIds.addAll(videoIds);
-    }
-
-    private class YoutubeAlgoDeceiverRunner implements Runnable {
-        private final FirefoxDriver driver;
-        private final String identifier;
-        private boolean shuttingDownIfQueueIsEmpty;
-        private long maxPlayTime = 10 * 1000;
-
-        public YoutubeAlgoDeceiverRunner(FirefoxDriver driver) {
-            this.driver = driver;
-            this.identifier = UUID.randomUUID().toString();
-        }
-
-        @Override
-        public void run() {
-            while (true) {
-                try {
-                    Thread.sleep(1000);
-
-                    String videoId = videoIds.pollLast();
-
-
-                    if (videoId == null) {
-                        if (this.isShuttingDownIfQueueIsEmpty()) {
-                            System.out.println("No video urls in queue... Deceiver Runner with id " + this.identifier + " exiting...");
-                            this.cleanup();
-                            return;
-                        } else {
-                            System.out.println("No video urls in queue... Deceiver Runner with id " + this.identifier + " waiting...");
-                            continue;
-                        }
-                    }
-
-                    System.out.println("Video id found! id = " + videoId);
-
-                    driver.get("http://youtube.com/watch?v=" + videoId);
-
-                    Thread.sleep(3000);
-
-                    List<WebElement> autoplayToggleCandidates = driver.findElements(By.id("improved-toggle"));
-
-                    if (autoplayToggleCandidates.size() > 0) {
-                        WebElement autoplayToggle = autoplayToggleCandidates.get(0);
-
-                        if (autoplayToggle.getAttribute("aria-pressed").equals("true")) {
-                            autoplayToggle.click();
-                            System.out.println("Disabled toggle");
-                        }
-
-                    }
-
-                    Thread.sleep(1000);
-
-                    driver.findElement(By.tagName("body")).sendKeys("k");
-                    System.out.println("Playback started");
-
-
-                    List<WebElement> candidates;
-
-                    long initialTimestamp = System.currentTimeMillis();
-
-                    while (true) {
-                        if (System.currentTimeMillis() - initialTimestamp > this.maxPlayTime) {
-                            System.out.println("Deceiver runner with id " + this.identifier + " has reached max play time. Exiting out of play loop...");
-                            driver.get("http://example.com");
-                            break;
-                        }
-
-                        Thread.sleep(5000);
-
-                        candidates = driver.findElements(By.className("html5-endscreen"));
-
-                        if (candidates.size() == 0) {
-                            continue;
-                        }
-
-                        WebElement endScreen = candidates.get(0);
-
-                        String displayValue = endScreen.getCssValue("display");
-
-                        if (!displayValue.equals("none")) {
-                            System.out.println("Finished playing back video with id " + videoId);
-                            break;
-                        }
-                    }
-                } catch (InterruptedException e) {
-                    System.out.println("Deceiver runner with id " + this.identifier + " was interrupted. Exiting...");
-                    e.printStackTrace();
-                    this.cleanup();
-                    return;
-                }
-
-            }
-        }
-
-        private void cleanup() {
-            this.driver.quit();
-        }
-
-
-        public boolean isShuttingDownIfQueueIsEmpty() {
-            return shuttingDownIfQueueIsEmpty;
-        }
-
-        public void setShuttingDownIfQueueIsEmpty(boolean shuttingDownIfQueueIsEmpty) {
-            this.shuttingDownIfQueueIsEmpty = shuttingDownIfQueueIsEmpty;
-        }
-
-        public long getMaxPlayTime() {
-            return maxPlayTime;
-        }
-
-        public void setMaxPlayTime(long maxPlayTime) {
-            this.maxPlayTime = maxPlayTime;
-        }
-
-        public String getIdentifier() {
-            return identifier;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            YoutubeAlgoDeceiverRunner that = (YoutubeAlgoDeceiverRunner) o;
-            return Objects.equals(identifier, that.identifier);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(identifier);
-        }
     }
 }
