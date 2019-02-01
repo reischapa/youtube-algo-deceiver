@@ -11,6 +11,7 @@ import org.openqa.selenium.firefox.FirefoxProfile;
 import java.io.File;
 import java.sql.*;
 import java.text.MessageFormat;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -18,6 +19,42 @@ import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 public class Scraper {
+
+    public static void main(String[] args) {
+        if (args.length < 4) {
+            System.err.println("Needs args dburl, geckoDriverPath, firefoxBinPath, waitTime");
+            System.exit(-1);
+        }
+
+        String dbUrl = args[0];
+        String geckoDriverPath = args[1];
+        String firefoxDriverPath = args[2];
+        Long waitTime = Long.valueOf(args[3]);
+
+        Scraper scraper = new Scraper(dbUrl, geckoDriverPath, firefoxDriverPath);
+        SearchExpressionGenerator expressionGenerator = new SearchExpressionGenerator(dbUrl);
+
+        System.out.println("Starting scraper...");
+        System.out.println(Arrays.toString(args));
+
+        try {
+            while (true) {
+                Thread.sleep(waitTime);
+
+                String searchExpression = expressionGenerator.getSearchExpression();
+                if (searchExpression == null) {
+                    System.err.println("Null search expression. Exiting...");
+                    break;
+                }
+                scraper.start(searchExpression);
+            }
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        scraper.stop();
+    }
+
     private ExecutorService executorService;
 
     private FirefoxDriver driver;
