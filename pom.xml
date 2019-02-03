@@ -10,7 +10,7 @@
     <version>1.0-SNAPSHOT</version>
     <modules>
         <module>youtube-algo-deceiver-runtime</module>
-        <module>youtube-algo-deceiver-scraper</module>
+        <module>youtube-algo-deceiver-discoverer</module>
         <module>youtube-algo-deceiver-search-expression-generator</module>
     </modules>
 
@@ -26,14 +26,6 @@
             <artifactId>selenium-java</artifactId>
             <version>3.141.59</version>
         </dependency>
-
-
-        <dependency>
-            <groupId>postgresql</groupId>
-            <artifactId>postgresql</artifactId>
-            <version>9.1-901-1.jdbc4</version>
-        </dependency>
-
     </dependencies>
 
 

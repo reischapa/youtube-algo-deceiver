@@ -14,28 +14,27 @@ import java.text.MessageFormat;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
-public class Scraper {
+public class Discoverer {
 
     public static void main(String[] args) {
-        if (args.length < 4) {
-            System.err.println("Needs args dburl, geckoDriverPath, firefoxBinPath, waitTime");
+        if (args.length < 6) {
+            System.err.println("Needs args dburl, dbUser, dbPassword, geckoDriverPath, firefoxBinPath, waitTime");
             System.exit(-1);
         }
 
         String dbUrl = args[0];
-        String geckoDriverPath = args[1];
-        String firefoxDriverPath = args[2];
-        Long waitTime = Long.valueOf(args[3]);
+        String dbUser = args[1];
+        String dbPassword = args[2];
+        String geckoDriverPath = args[3];
+        String firefoxDriverPath = args[4];
+        Long waitTime = Long.valueOf(args[5]);
 
-        Scraper scraper = new Scraper(dbUrl, geckoDriverPath, firefoxDriverPath);
-        SearchExpressionGenerator expressionGenerator = new SearchExpressionGenerator(dbUrl);
+        Discoverer discoverer = new Discoverer(dbUrl, dbUser, dbPassword, geckoDriverPath, firefoxDriverPath);
+        SearchExpressionGenerator expressionGenerator = new SearchExpressionGenerator(dbUrl, dbUser, dbPassword);
 
-        System.out.println("Starting scraper...");
-        System.out.println(Arrays.toString(args));
+        System.out.println("Starting discoverer...");
 
         try {
             while (true) {
@@ -46,27 +45,25 @@ public class Scraper {
                     System.err.println("Null search expression. Exiting...");
                     break;
                 }
-                scraper.start(searchExpression);
+                discoverer.start(searchExpression);
             }
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
 
-        scraper.stop();
+        discoverer.stop();
     }
-
-    private ExecutorService executorService;
 
     private FirefoxDriver driver;
 
     private String dbUrl;
+    private String dbUser;
+    private String dbPassword;
 
-    public Scraper(String dbUrl, String geckoDriverPath, String firefoxBinPath) {
-        this.executorService = Executors.newCachedThreadPool();
-
+    public Discoverer(String dbUrl, String dbUser, String dbPassword, String geckoDriverPath, String firefoxBinPath) {
         FirefoxOptions options = new FirefoxOptions();
 
-        options.addArguments("--headless"); // This will make Firefox to run in headless mode.
+        options.addArguments("--headless"); // This will make Firefox run in headless mode.
 
         System.setProperty("webdriver.gecko.driver", geckoDriverPath);
 
@@ -81,10 +78,12 @@ public class Scraper {
         this.driver = new FirefoxDriver(options);
 
         this.dbUrl = dbUrl;
+        this.dbUser = dbUser;
+        this.dbPassword = dbPassword;
     }
 
 
-    public void start(String searchExpression) {
+    public void start(String searchExpression) throws IllegalStateException {
         driver.get("http://youtube.com/results?search_query=" + searchExpression);
 
         try {
@@ -146,10 +145,10 @@ public class Scraper {
 
             System.out.println(MessageFormat.format("{0} valid videoIds found.", validIds.size()));
 
-            try (Connection connection = DriverManager.getConnection(this.dbUrl)) {
+            try (Connection connection = DriverManager.getConnection(this.dbUrl, this.dbUser, this.dbPassword)) {
                 connection.setAutoCommit(false);
 
-                PreparedStatement ps = connection.prepareStatement("INSERT INTO videos values (?)");
+                PreparedStatement ps = connection.prepareStatement("INSERT INTO videos values (DEFAULT, ?)");
 
                 for (int i = 0; i < validIds.size(); i++) {
                     String id = validIds.get(i);
@@ -163,9 +162,18 @@ public class Scraper {
 
                 connection.commit();
 
-                System.out.println("Completed scraping process for search expression: " + searchExpression);
+                System.out.println("Completed discovering process for search expression: " + searchExpression);
             } catch (SQLException e) {
                 e.printStackTrace();
+
+                SQLException next = e.getNextException();
+
+                do {
+                    next.printStackTrace();
+                    next = next.getNextException();
+                } while (next != null);
+
+                throw new IllegalStateException("Error performing result insert operation");
             }
 
 
@@ -178,8 +186,8 @@ public class Scraper {
     public List<String> getURLList(int limit) {
         List<String> result = new LinkedList<>();
 
-        try (Connection connection = DriverManager.getConnection(this.dbUrl)) {
-            PreparedStatement ps = connection.prepareStatement("SELECT * FROM videos ORDER BY RANDOM() LIMIT (?)");
+        try (Connection connection = DriverManager.getConnection(this.dbUrl, this.dbUser, this.dbPassword)) {
+            PreparedStatement ps = connection.prepareStatement("SELECT video_id FROM videos ORDER BY RANDOM() LIMIT (?)");
             ps.setInt(1, limit);
 
             ps.execute();

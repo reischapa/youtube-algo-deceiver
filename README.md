@@ -8,13 +8,13 @@ Except it will be in a headless Firefox instance, running in some remote server,
 
 ### Implemented components:
 
- - Naive Youtube video id scraper, that uses search with random words; 
- - Search expression generator, that can feed the scraper using words taken from a dictionary;
+ - Naive Youtube video id discoverer, that uses search with random words; 
+ - Search expression generator, that can feed the discoverer using words taken from a dictionary;
  - Youtube video player, that automatically switches videos upon completion;
  
 ### TODO
  
- - CLI - not done, in progress
+ - CLI's (several) - in progress
  - Documentation - not done
  - Finish readying video player for multiple simultaneous instances of firefox - done
  
