@@ -13,6 +13,6 @@ DROP TABLE search_expressions;
 CREATE TABLE search_expressions(
   id SERIAL,
   search_expression TEXT
-)
+);
 
 ALTER TABLE search_expressions ADD CONSTRAINT search_expressions_primary_key PRIMARY KEY(id);
