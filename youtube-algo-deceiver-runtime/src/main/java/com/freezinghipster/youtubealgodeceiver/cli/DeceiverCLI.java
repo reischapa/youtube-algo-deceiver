@@ -5,10 +5,10 @@ import com.freezinghipster.youtubealgodeceiver.DeceiverOptions;
 import com.freezinghipster.youtubealgodeceiver.DeceiverRunnerOptions;
 import com.freezinghipster.youtubealgodeceiver.cli.DeceiverOptionsImpl.CLIDeceiverOptionsKeys;
 import picocli.CommandLine;
+import sun.awt.image.ImageWatched;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.io.*;
+import java.util.*;
 
 public class DeceiverCLI {
 
@@ -78,6 +78,15 @@ public class DeceiverCLI {
         );
 
         spec.addOption(
+                CommandLine.Model.OptionSpec.builder("--videoIdsFile")
+                        .paramLabel("VIDEO_IDS_FILE_PATH")
+                        .type(String.class)
+                        .description("file containing newline-separated youtube video ids")
+                        .required(true)
+                        .build()
+        );
+
+        spec.addOption(
                 CommandLine.Model.OptionSpec.builder("-c", "--count")
                         .paramLabel("COUNT")
                         .type(Integer.class)
@@ -87,7 +96,6 @@ public class DeceiverCLI {
         );
 
 
-
         commandLine = new CommandLine(spec);
 
         resultHandler = new Handler().useOut(System.out);
@@ -95,7 +103,7 @@ public class DeceiverCLI {
         exceptionHandler = new CommandLine.DefaultExceptionHandler<>();
     }
 
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) {
         DeceiverCLI handler = new DeceiverCLI();
 
         Map<String,Object> options = handler.parseArgs(args);
@@ -107,7 +115,7 @@ public class DeceiverCLI {
         System.out.println(deceiverOptions.getQueueCycleTime());
 
         deceiverRunnerOptions.setMaxPlayTime(deceiverOptions.getMaxPlayingTime());
-        deceiverRunnerOptions.setShuttingDownIfQueueIsEmpty(false);
+        deceiverRunnerOptions.setShuttingDownIfQueueIsEmpty(true);
         deceiverRunnerOptions.setQueueCycleTime(deceiverOptions.getQueueCycleTime());
 
         Deceiver deceiver = new Deceiver(deceiverOptions);
@@ -117,12 +125,34 @@ public class DeceiverCLI {
             deceiver.setRunnerOptions(runnerId, deceiverRunnerOptions);
         }
 
+        List<String> videoIds = new LinkedList<>();
+
+        Object filePath = options.get("VIDEO_IDS_FILE_PATH");
+
+        if (!(filePath instanceof String)){
+            System.err.println("Invalid video ids file path provided: " + filePath + ". Exiting...");
+            return;
+        }
+
+        try (BufferedReader br = new BufferedReader(new FileReader(new File((String) filePath)))) {
+            String currentLine = br.readLine();
+            do {
+                videoIds.add(currentLine);
+                currentLine = br.readLine();
+            } while (currentLine != null);
+        } catch (IOException e) {
+            e.printStackTrace();
+            System.out.println("Could not read video ids file! Exiting...");
+            return;
+        }
+
+        System.out.println(videoIds.size() + " video ids loaded from file.");
+
+        Collections.shuffle(videoIds);
+
+        deceiver.pushVideoIds(videoIds);
+
         deceiver.startAllRunners();
-
-        Thread.sleep(30000);
-
-        deceiver.stopAllRunners();
-
     }
 
     public Map<String, Object> parseArgs(String... args) {
