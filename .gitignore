@@ -144,3 +144,4 @@ tags
 **/words_alpha.txt
 *.iml
 .idea
+*app.properties

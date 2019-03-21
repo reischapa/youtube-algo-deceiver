@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="UTF-8">
+    <title>YT Deceiver Viewer</title>
+    <script src="js/index.js"></script>
+</head>
+<body>
+    <div>
+        <iframe id="iframe"
+                allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen frameborder="0" height="315"
+                src=""
+                width="560"
+                style="visibility: hidden"
+        >
+        </iframe>
+    </div>
+    <div>
+        <select onchange="window.changeVideo(event)" th:size="10">
+            <option disabled selected>Select a video id...</option>
+            <option th:each="videoId : ${videoIds}" th:value="${videoId}" th:text="${videoId}"></option>
+        </select>
+        <label for="setAutoplay">Set autoplay</label>
+        <input id="setAutoplay" type="checkbox" onclick="window.setShouldAutoplay(event)" checked/>
+    </div>
+</body>
+</html>
