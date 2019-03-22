@@ -1,5 +1,7 @@
-package com.freezinghipster.youtubealgodeceiver;
+package com.freezinghipster.youtubealgodeceiver.discoverer;
 
+import com.freezinghipster.youtubealgodeceiver.SearchExpressionGenerator;
+import org.apache.commons.lang3.StringEscapeUtils;
 import org.openqa.selenium.By;
 import org.openqa.selenium.Keys;
 import org.openqa.selenium.WebElement;
@@ -11,9 +13,13 @@ import org.openqa.selenium.firefox.FirefoxProfile;
 import java.io.File;
 import java.sql.*;
 import java.text.MessageFormat;
-import java.util.Arrays;
+import java.time.Instant;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class Discoverer {
@@ -59,6 +65,8 @@ public class Discoverer {
     private String dbUrl;
     private String dbUser;
     private String dbPassword;
+
+    private String titleExclusionRegex = "w\\s+to\\s+([pP]ronounce|[sS]ay|[wW]rite|[sS]pell)";
 
     public Discoverer(String dbUrl, String dbUser, String dbPassword, String geckoDriverPath, String firefoxBinPath) {
         FirefoxOptions options = new FirefoxOptions();
@@ -121,39 +129,102 @@ public class Discoverer {
                 Thread.sleep(waitTime);
             }
 
-            System.out.println("Finding thumbnails...");
+            System.out.println("Finding results...");
 
-            List<WebElement> thumbnails = this.driver.findElements(By.id("thumbnail"));
+            List<WebElement> results = this.driver.findElements(By.tagName("ytd-video-renderer"));
 
-            if (thumbnails.size() == 0) {
+            if (results.size() == 0) {
                 System.out.println("No thumbnail elements found");
+                return;
             }
 
-            System.out.println(MessageFormat.format("{0} thumbnail elements found...", thumbnails.size()));
+            System.out.println(MessageFormat.format("{0} results found...", results.size()));
 
-            List<String> validIds = thumbnails.stream().map(e -> {
-                String href = e.getAttribute("href");
+
+            List<Map<String, String>> extractedResults = results.parallelStream().map(result -> {
+                WebElement thumbnailLink = null;
+                WebElement textLink = null;
+
+
+                try {
+                    thumbnailLink = result.findElement(By.id("thumbnail"));
+                    textLink = result.findElement(By.id("video-title"));
+                } catch (Exception e) {
+                    System.out.println(e.getMessage());
+                    return null;
+                }
+
+                if (thumbnailLink == null || textLink == null) {
+                    return null;
+                }
+
+                String href = thumbnailLink.getAttribute("href");
+
+                href = StringEscapeUtils.escapeHtml4(href);
+
                 href = href.replaceFirst("^.*v=", "");
+
                 if (href.length() > 11) {
                     href = href.substring(0, 11);
                 }
 
-                return href;
-            })
-                    .filter(e -> e.matches("[A-Za-z0-9-_]{11}"))
-                    .collect(Collectors.toList());
+                String title = textLink.getAttribute("title");
 
-            System.out.println(MessageFormat.format("{0} valid videoIds found.", validIds.size()));
+                title = StringEscapeUtils.escapeHtml4(title);
+
+                Map<String, String> r = new HashMap<>();
+                r.put("id", href);
+                r.put("title", title);
+
+                return r;
+            })
+                .filter(r -> {
+                    if (r == null) {
+                        return false;
+                    }
+
+                    String id = r.get("id");
+                    String title = r.get("title");
+
+                    if (!id.matches("[A-Za-z0-9-_]{11}")) {
+                        System.out.println("Filtered out result with invalid id " + id);
+                        return false;
+                    };
+
+                    Pattern pattern = Pattern.compile(this.titleExclusionRegex);
+                    Matcher matcher = pattern.matcher(title);
+
+                    if (matcher.find()) {
+                        System.out.println("Filtered out result with title " + title);
+                        return false;
+                    }
+
+                    return true;
+                })
+                .collect(Collectors.toList());
+
+
+            if (extractedResults.size() == 0) {
+                System.out.println("No valid results remain after filtering...");
+                return;
+            } else {
+                System.out.println(MessageFormat.format("{0} valid results found.", extractedResults.size()));
+            }
 
             try (Connection connection = DriverManager.getConnection(this.dbUrl, this.dbUser, this.dbPassword)) {
                 connection.setAutoCommit(false);
 
-                PreparedStatement ps = connection.prepareStatement("INSERT INTO videos values (DEFAULT, ?)");
+                PreparedStatement ps = connection.prepareStatement("INSERT INTO videos values (DEFAULT, ?, ?, ?)");
 
-                for (int i = 0; i < validIds.size(); i++) {
-                    String id = validIds.get(i);
-                    ps.setString(1, id);
-                    System.out.println("Inserting videoId " + id);
+                for (Map<String, String> r : extractedResults) {
+                    String id = r.get("id");
+                    String title = r.get("title");
+
+                    ps.setString(1, r.get(id));
+                    ps.setString(2, r.get(title));
+                    ps.setTimestamp(3, Timestamp.from(Instant.now()));
+
+                    System.out.println("Inserting video with id " + id + " and title \"" + title + "\"");
                     ps.addBatch();
 
                 }
