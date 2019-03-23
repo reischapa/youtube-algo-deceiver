@@ -220,8 +220,8 @@ public class Discoverer {
                     String id = r.get("id");
                     String title = r.get("title");
 
-                    ps.setString(1, r.get(id));
-                    ps.setString(2, r.get(title));
+                    ps.setString(1, id);
+                    ps.setString(2, title);
                     ps.setTimestamp(3, Timestamp.from(Instant.now()));
 
                     System.out.println("Inserting video with id " + id + " and title \"" + title + "\"");
