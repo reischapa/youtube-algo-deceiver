@@ -12,7 +12,6 @@
         <module>youtube-algo-deceiver-runtime</module>
         <module>youtube-algo-deceiver-discoverer</module>
         <module>youtube-algo-deceiver-search-expression-generator</module>
-        <module>youtube-algo-deceiver-viewer</module>
     </modules>
 
     <properties>
